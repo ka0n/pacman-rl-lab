@@ -1,0 +1,24 @@
+Pac-Man RL Lab
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Original project code is licensed under the GNU General Public License,
+version 3 or (at your option) any later version. See LICENSE.
+Copyright remains with the respective original contributors. This notice
+does not assign ownership, identify unverified authors, or relicense third
+party materials.
+
+The Rust MT19937 compatibility implementation follows the algorithm and
+CPython integer-seeding behavior. The upstream MT19937 copyright and BSD
+conditions are preserved in third_party/MT19937-LICENSE.txt. The Python
+license is also retained in third_party/Python-LICENSE.txt for the CPython
+compatibility implementation. These permissive notices remain applicable
+to their respective portions alongside this project's GPL licensing.
+
+External dependencies retain their own licenses; they are not relicensed
+under this project's GPL declaration. See docs/THIRD_PARTY_LICENSES.md.
+
+This is an independent Pac-Man-inspired reinforcement-learning research
+environment. Pac-Man is a trademark of Bandai Namco. This project is not
+affiliated with, endorsed by, or sponsored by Bandai Namco. No original
+commercial game artwork, audio, ROMs, fonts, or logos are distributed.
+No trademark license is granted by this project's software license.

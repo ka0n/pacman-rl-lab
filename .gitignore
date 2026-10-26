@@ -1,0 +1,52 @@
+# Environment, caches and build products
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
+# Model checkpoints, logs, training artifacts
+runs/
+*.pt
+*.pth
+*.ckpt
+# Rust compiled outputs
+native/**/target/
+*.dll
+*.so
+*.dylib
+# Development secrets
+.env
+.env.*
+# Local reports, private configuration and generated distribution files
+docs/validation/
+*.log
+*.zip
+*.whl
+*.tar.gz
+dist/
+build/
+artifacts/
+checkpoints/
+replay/
+data/
+*.safetensors
+*.onnx
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.pem
+*.key
+*.p12
+*.pfx
+*.kdbx
+*.sqlite*
+*.db
+*.local.*
+.coverage*
+htmlcov/
+.idea/
+.vscode/

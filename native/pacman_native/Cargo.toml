@@ -1,0 +1,16 @@
+[package]
+name = "pacman_native"
+version = "0.7.0"
+edition = "2021"
+description = "Native batched engine for pacman-rl-lab, std-only"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/ka0n/pacman-rl-lab"
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"

@@ -1,0 +1,32 @@
+{
+  "heldout_episodes_per_run": 1000,
+  "heldout_seed": 620000,
+  "results": {
+    "cnn_single": {
+      "win_percent_per_seed": {
+        "930042": 89.3,
+        "930043": 90.1,
+        "930044": 89.2
+      },
+      "mean_win_percent": 89.53333333333333,
+      "sample_stddev_pp": 0.4932882862316212,
+      "mean_pellet_percent": 97.19686666666666
+    },
+    "cnn_motion": {
+      "win_percent_per_seed": {
+        "930042": 75.4,
+        "930043": 76.2,
+        "930044": 77.1
+      },
+      "mean_win_percent": 76.23333333333333,
+      "sample_stddev_pp": 0.8504900548115325,
+      "mean_pellet_percent": 93.5177
+    }
+  },
+  "paired_motion_minus_control_pp": {
+    "930042": -13.9,
+    "930043": -13.9,
+    "930044": -12.1
+  },
+  "mean_paired_difference_pp": -13.3
+}
