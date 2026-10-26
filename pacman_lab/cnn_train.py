@@ -21,7 +21,7 @@ from .core import PacmanGame
 from .dqn import select_device
 from .cnn_motion import observer_for
 from .train import exploration_epsilon
-from .marathon_train import atomic_save_torch, checkpoint_read
+from .marathon_train import atomic_save_torch, checkpoint_read, resume_best_score
 
 FIELDS = ["step", "episodes", "epsilon", "pellet_percent", "win_percent",
           "wall_bumps_per_episode", "stationary_percent", "reversals_per_episode",
@@ -30,9 +30,16 @@ FIELDS = ["step", "episodes", "epsilon", "pellet_percent", "win_percent",
 
 
 class EpisodeReplay:
-    """Bounded memory: sample contiguous fragments inside completed episodes."""
+    """Sample completed episodes, or bounded tails of overlong live episodes.
+
+    Prefix eviction never introduces a terminal or world boundary inside a
+    sequence. Every sample still includes the full requested burn-in + unroll.
+    """
     def __init__(self, capacity: int, sequence_length: int):
+        if sequence_length < 1 or capacity < sequence_length:
+            raise ValueError("Replay capacity must hold a positive sequence length")
         self.capacity = capacity
+        self.episode_capacity = capacity
         self.sequence_length = sequence_length
         self.episodes: deque[list] = deque()
         self.current: list = []
@@ -40,27 +47,43 @@ class EpisodeReplay:
         self.eligible: list[list] = []
 
     def append(self, item, done: bool):
-        self.current.append(item)
+        self.current = self._append_episode(self.current, item, done)
+
+    def _inflight(self):
+        return [(self.current, self.episode_capacity)]
+
+    def _append_episode(self, current, item, done, limit=None):
+        limit = self.episode_capacity if limit is None else limit
+        if len(current) == limit:
+            del current[0]
+            self.total -= 1
+        current.append(item)
         self.total += 1
         if done:
-            completed = self.current
-            self.current = []
+            completed, current = current, []
             self.episodes.append(completed)
             if len(completed) >= self.sequence_length:
                 self.eligible.append(completed)
-            while self.total > self.capacity and self.episodes:
-                gone = self.episodes.popleft()
-                self.total -= len(gone)
-                if len(gone) >= self.sequence_length:
-                    # Oldest eligible episode is also oldest matching entry.
-                    assert self.eligible.pop(0) is gone
+        while self.total > self.capacity and self.episodes:
+            gone = self.episodes.popleft()
+            self.total -= len(gone)
+            if len(gone) >= self.sequence_length:
+                assert self.eligible.pop(0) is gone
+        return current
+
+    @property
+    def can_sample(self):
+        return bool(self.eligible) or any(
+            len(ep) == limit for ep, limit in self._inflight())
 
     def sample(self, rng: random.Random, batch_size: int):
-        if not self.eligible:
-            raise ValueError("No complete episodes long enough for sequence replay")
+        eligible = self.eligible + [ep for ep, limit in self._inflight()
+                                    if len(ep) == limit]
+        if not eligible:
+            raise ValueError("No episodes long enough for sequence replay")
         segments = []
         for _ in range(batch_size):
-            ep = rng.choice(self.eligible)
+            ep = rng.choice(eligible)
             start = rng.randrange(len(ep) - self.sequence_length + 1)
             segments.append(ep[start:start + self.sequence_length])
         return segments
@@ -173,6 +196,10 @@ def run_training(*, architecture: str, steps: int, seed: int, output: Path | str
     if not 0 < epsilon_decay_fraction <= 1:
         raise ValueError("Epsilon decay fraction must be in (0,1]")
     spec = SPECS[architecture]
+    if spec.recurrent and replay_capacity < burnin + unroll:
+        raise ValueError("Replay capacity must hold burn-in + unroll")
+    if spec.recurrent and warmup > replay_capacity:
+        raise ValueError("Recurrent warmup must not exceed replay capacity")
     path = Path(output)
     path.mkdir(parents=True, exist_ok=True)
     device = select_device(device_name)
@@ -215,7 +242,7 @@ def run_training(*, architecture: str, steps: int, seed: int, output: Path | str
             raise ValueError("Checkpoint shape or architecture mismatch")
         start_step = int(checkpoint["step"])
         episodes = int(checkpoint["episodes"])
-        best_score = tuple(checkpoint["best_score"])
+        best_score = resume_best_score(checkpoint, path, device, resume)
         online.load_state_dict(checkpoint["model"])
         target.load_state_dict(checkpoint["target"])
         optimizer.load_state_dict(checkpoint["optimizer"])
@@ -279,7 +306,7 @@ def run_training(*, architecture: str, steps: int, seed: int, output: Path | str
                 hidden=None
             if t % train_every == 0 and (t-start_step)>=warmup:
                 if spec.recurrent:
-                    can_train=replay.total >= max(warmup,batch_size) and bool(replay.eligible)
+                    can_train=replay.total >= max(warmup,batch_size) and replay.can_sample
                 else:
                     can_train=len(replay)>=max(warmup,batch_size)
                 if can_train:
@@ -316,9 +343,9 @@ def run_training(*, architecture: str, steps: int, seed: int, output: Path | str
                          "optimizer":optimizer.state_dict(),"input_shape":shape,
                          "step":t,"steps":t,"episodes":episodes,"config":config,
                          "best_score":best_score,"metrics":metrics or {}}
-                atomic_save_torch(payload,path/"last.pt")
                 if evaluate and improved:
                     atomic_save_torch(payload,path/"best.pt")
+                atomic_save_torch(payload,path/"last.pt")
     if engine == "rust": game.close()
     return path
 

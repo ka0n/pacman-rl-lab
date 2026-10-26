@@ -183,7 +183,7 @@ def run_training(mode: str = "direct", steps: int = 300000,
                     action = int(online(x).argmax(dim=1).item())
             transition = game.step(action)
             replay.append((state, action, transition.reward, transition.observation,
-                           transition.terminated))
+                           transition.terminated or transition.truncated))
             state = transition.observation
             if game.done:
                 episode += 1

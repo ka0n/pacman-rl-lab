@@ -142,7 +142,7 @@ impl Game {
             }
         }
         let player_initial = player_initial?;
-        if ghosts > ghost_initial.len() {
+        if ghost_initial.len() < 2 {
             if ghost_initial.is_empty() {return None;}
             let mut furthest: Option<(usize, usize)> = None;
             for pos in 0..h*w {
@@ -340,5 +340,23 @@ mod tests {
         let mut g=Game::from_layout("#####\n#P.G#\n#####",1,1,0,42).unwrap();
         assert_eq!(g.stats.pellets_left,1);
         assert_eq!(g.step(3).unwrap().0,10.99);
+    }
+    #[test]
+    fn reset_ghost_count_uses_complete_spawn_pool() {
+        for layout in ["#######\n#P....#\n#G...G#\n#######",
+                       "#######\n#P....#\n#..G..#\n#######"] {
+            for initial in 0..=2 {
+                let mut game = Game::from_layout(layout, initial, 1, 24, 7).unwrap();
+                assert_eq!(game.ghost_initial.len(), 2);
+                for requested in [2, 0, 1, 2] {
+                    game.reset(Some(7), requested, 2);
+                    assert_eq!(game.ghosts.len(), requested as usize);
+                    assert_eq!(game.stats.ghost_count, requested);
+                    let reference = Game::from_layout(layout, requested as usize, 2, 24, 7).unwrap();
+                    assert_eq!(game.ghosts, reference.ghosts);
+                    assert_eq!(game.rng.random(), PythonMt::new(7).random());
+                }
+            }
+        }
     }
 }
