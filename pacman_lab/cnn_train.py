@@ -369,6 +369,11 @@ def main():
     p.add_argument("--burnin",type=int,default=4)
     p.add_argument("--unroll",type=int,default=8)
     p.add_argument("--train-every",type=int,default=8)
+    p.add_argument("--target-every",type=int,default=2000)
+    p.add_argument("--learning-rate",type=float,default=0.00015)
+    p.add_argument("--epsilon-start",type=float,default=1.0)
+    p.add_argument("--epsilon-end",type=float,default=0.08)
+    p.add_argument("--epsilon-decay-fraction",type=float,default=0.85)
     p.add_argument("--worlds",type=int,default=1,help="Batched independent environments; 1 preserves v0.7 trainer")
     a=p.parse_args()
     if a.worlds>1:
@@ -382,6 +387,9 @@ def main():
                  batch_size=a.batch_size,warmup=a.warmup,
                  replay_capacity=a.replay_capacity,burnin=a.burnin,
                  unroll=a.unroll,train_every=a.train_every,resume=a.resume,
+                 target_every=a.target_every,learning_rate=a.learning_rate,
+                 epsilon_start=a.epsilon_start,epsilon_end=a.epsilon_end,
+                 epsilon_decay_fraction=a.epsilon_decay_fraction,
                  maze=a.maze,engine=a.engine,**({"worlds":a.worlds} if a.worlds>1 else {}))
 
 if __name__ == "__main__":main()

@@ -25,6 +25,13 @@ from .dqn import select_device
 from .marathon_train import atomic_save_torch, checkpoint_read, resume_best_score
 from .cnn_motion import observer_for, current_frame
 from .train import exploration_epsilon
+
+
+def _write_checkpoint_snapshot(payload, path: Path):
+    """Write an immutable checkpoint for one save interval."""
+    if path.exists():
+        raise FileExistsError(f"Refusing to overwrite checkpoint snapshot {path}")
+    atomic_save_torch(payload, path)
 from .cnn_safety import maze_risk, shaped_reward
 
 
@@ -345,8 +352,16 @@ def run_batched(*, architecture: str, steps: int, seed: int, output: Path | str,
                              "step":completed,"steps":completed,"episodes":episodes,
                              "config":config,"best_score":best_score,"metrics":metrics or {},
                              "fine_tune":fine_tune}
+                    # Refuse a colliding snapshot before modifying mutable pointers.
+                    checkpoint_dir=path/"checkpoints"
+                    checkpoint_dir.mkdir(exist_ok=True)
+                    snapshot=checkpoint_dir/f"step_{completed:09d}.pt"
+                    if snapshot.exists():
+                        raise FileExistsError(f"Refusing to overwrite checkpoint snapshot {snapshot}")
                     if evaluate and improved:atomic_save_torch(payload,path/"best.pt")
                     atomic_save_torch(payload,path/"last.pt")
+                    # Keep every requested save point as an immutable artifact.
+                    _write_checkpoint_snapshot(payload,snapshot)
         return path
     finally:
         env.close()
