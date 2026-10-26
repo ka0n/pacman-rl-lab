@@ -163,7 +163,7 @@ def build_report(root: Path):
                f"Best checkpoint step: {a['trained_steps']:,}; SHA256: `{a['sha256']}`",
                f"Average logged throughput: {a['mean_logged_steps_per_second']:.1f} steps/sec.",""]
     (directory/"report.md").write_text("\n".join(md)+"\n",encoding="utf-8")
-    (directory/"report.html").write_text("<!doctype html><meta charset='utf-8'><title>Pac-Man CNN Report</title>" 
+    (directory/"report.html").write_text("<!doctype html><meta charset='utf-8'><title>Pac-Man CNN Report</title>"
             "<style>body{font:16px system-ui;max-width:1050px;margin:3em auto;line-height:1.5}pre{white-space:pre-wrap}</style>"
             "<h1>Pac-Man CNN / GRU Report</h1><pre>"+html.escape("\n".join(md))+"</pre>",encoding="utf-8")
     artifact=root/"UPLOAD_THIS_CNN_report.zip"
