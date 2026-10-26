@@ -134,6 +134,7 @@ class NativeBatch:
             if self.count != 1: raise ValueError("Changing ghost count requires a single-game batch")
         if ghost_every is not None:
             if ghost_every < 1: raise ValueError("ghost_every must be >= 1")
+            if self.count != 1: raise ValueError("Changing ghost cadence requires a single-game batch")
         if seed is not None and not 0 <= seed < 2**64-1:
             raise ValueError("Rust parity seeds must be integers between 0 and 2**64-2")
         frame = self._obs[index]

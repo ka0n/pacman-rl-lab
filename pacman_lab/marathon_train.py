@@ -82,17 +82,41 @@ def atomic_save_torch(payload, path: Path):
     os.replace(temp, path)
 
 
-def resume_best_score(checkpoint, output: Path, device):
-    """Recover a best checkpoint committed just before an interrupted last save."""
+def resume_best_score(checkpoint, output: Path, device, source=None):
+    """Reconcile best files and recover evaluable last saves from the old order.
+
+    An external warm restart copies the best model to its new output directory.
+    Only saved evaluation evidence can identify last.pt itself as a best model.
+    """
     score = tuple(checkpoint.get("best_score", (-1.0, -1.0)))
     best_path = output / "best.pt"
-    if best_path.exists():
-        best = checkpoint_read(best_path, device)
-        config_key = "marathon_config" if "marathon_config" in checkpoint else "config"
-        if best.get(config_key) != checkpoint.get(config_key):
+    paths = [best_path]
+    if source is not None:
+        sibling = Path(source).parent / "best.pt"
+        if sibling.resolve() != best_path.resolve():
+            paths.append(sibling)
+    best, best_score, output_score = None, (-1.0, -1.0), (-1.0, -1.0)
+    config_key = "marathon_config" if "marathon_config" in checkpoint else "config"
+    for candidate in paths:
+        if not candidate.exists():
+            continue
+        saved = checkpoint_read(candidate, device)
+        if saved.get(config_key) != checkpoint.get(config_key):
             raise ValueError("Best checkpoint belongs to a different training configuration")
-        score = max(score, tuple(best["best_score"]))
-    return score
+        candidate_score = tuple(saved.get("best_score", (-1.0, -1.0)))
+        if candidate == best_path:
+            output_score = candidate_score
+        if candidate_score > best_score:
+            best, best_score = saved, candidate_score
+    metrics = checkpoint.get("metrics", {})
+    evaluated_score = (metrics.get("win_percent"), metrics.get("pellet_percent"))
+    if score == evaluated_score and score > best_score:
+        best, best_score = checkpoint, score
+    if best_score < score:
+        raise ValueError("Cannot recover best model: saved best-score weights are unavailable")
+    if best is not None and best_score > output_score:
+        atomic_save_torch(best, best_path)
+    return max(score, best_score)
 
 
 def run_marathon_training(variant: str, steps: int, seed: int, output: str | Path,
@@ -139,6 +163,7 @@ def run_marathon_training(variant: str, steps: int, seed: int, output: str | Pat
         start_step = int(saved["steps"])
         episodes = int(saved.get("episodes_total", saved.get("episodes", 0)))
         if start_step >= steps:
+            resume_best_score(saved, output, device, resume)
             return output
         old_config = saved.get("marathon_config", {})
         for name, requested in (("steps", steps), ("epsilon_start", epsilon_start),
@@ -149,7 +174,7 @@ def run_marathon_training(variant: str, steps: int, seed: int, output: str | Pat
         online.load_state_dict(saved["model"])
         target.load_state_dict(saved.get("target", saved["model"]))
         optimizer.load_state_dict(saved["optimizer"])
-        best_score = resume_best_score(saved, output, device)
+        best_score = resume_best_score(saved, output, device, resume)
         print(f"Warm restart at {start_step}/{steps}; replay/RNG/episode reset", flush=True)
     else:
         if (output / "last.pt").exists() or (output / "metrics.csv").exists():

@@ -79,22 +79,21 @@ def run_suite(output: str | Path, *, steps=400000, repeats=2, seed=42,
         for run in manifest["runs"]:
             path = root / run["run_dir"]
             last = path / "last.pt"
-            if run["status"] == "completed" and (path / "best.pt").exists():
-                print(f"SKIP completed: {run['run_dir']}", flush=True)
-                continue
             if not resume_suite and run["status"] != "pending":
                 raise RuntimeError("Run state inconsistent; use --resume-suite")
             # Repair an interrupted run based on checkpoint, not stale manifest status.
             checkpoint = None
-            if last.exists():
-                from .marathon_train import checkpoint_read
+            recovery = last if last.exists() else path / "best.pt"
+            if recovery.exists():
+                from .marathon_train import checkpoint_read, resume_best_score
                 from .dqn import select_device
-                payload = checkpoint_read(last, select_device("cpu"))
-                if payload["steps"] >= cfg["steps"] and (path / "best.pt").exists():
+                payload = checkpoint_read(recovery, select_device("cpu"))
+                resume_best_score(payload, path, select_device("cpu"), recovery)
+                if (run["status"] == "completed" or payload["steps"] >= cfg["steps"]) and (path / "best.pt").exists():
                     run["status"] = "completed"
                     atomic_json(manifest_path, manifest)
                     continue
-                checkpoint = str(last)
+                checkpoint = str(recovery)
             elif path.exists() and any(path.iterdir()):
                 # A run can have only a log/config before first checkpoint.
                 # No learning progress is recoverable, clean up these artifacts.

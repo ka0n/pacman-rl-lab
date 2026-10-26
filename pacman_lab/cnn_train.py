@@ -242,7 +242,7 @@ def run_training(*, architecture: str, steps: int, seed: int, output: Path | str
             raise ValueError("Checkpoint shape or architecture mismatch")
         start_step = int(checkpoint["step"])
         episodes = int(checkpoint["episodes"])
-        best_score = resume_best_score(checkpoint, path, device)
+        best_score = resume_best_score(checkpoint, path, device, resume)
         online.load_state_dict(checkpoint["model"])
         target.load_state_dict(checkpoint["target"])
         optimizer.load_state_dict(checkpoint["optimizer"])

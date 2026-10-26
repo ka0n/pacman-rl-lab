@@ -99,6 +99,7 @@ def run_batched(*, architecture: str, steps: int, seed: int, output: Path | str,
         raise ValueError("Invalid batch size or epsilon")
     if not 0 < epsilon_decay_fraction <= 1:
         raise ValueError("Invalid epsilon schedule")
+    worlds = min(worlds, steps)
     if SPECS[architecture].recurrent and replay_capacity < worlds * (burnin + unroll):
         raise ValueError("Replay capacity must hold burn-in + unroll for every world")
     if SPECS[architecture].recurrent and warmup > replay_capacity:
@@ -107,9 +108,6 @@ def run_batched(*, architecture: str, steps: int, seed: int, output: Path | str,
         raise ValueError('Death penalty must be negative')
     if risk_shaping_weight < 0:
         raise ValueError('Risk shaping weight must be nonnegative')
-    if worlds > steps:
-        worlds = steps
-
     path = Path(output)
     path.mkdir(parents=True,exist_ok=True)
     device=select_device(device_name)
@@ -176,7 +174,7 @@ def run_batched(*, architecture: str, steps: int, seed: int, output: Path | str,
                 raise ValueError("Checkpoint shape mismatch")
             start_step=int(payload["step"])
             episodes=int(payload["episodes"])
-            best_score=resume_best_score(payload, path, device)
+            best_score=resume_best_score(payload, path, device, resume)
             fine_tune=payload.get("fine_tune")
             online.load_state_dict(payload["model"])
             target.load_state_dict(payload["target"])

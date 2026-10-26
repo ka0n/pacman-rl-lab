@@ -207,13 +207,14 @@ def run_suite(root: Path, *,steps=1000000,repeats=3,seed=42,engine="python",devi
         for item in manifest["runs"]:
             path=root/item["run_dir"]
             last=path/"last.pt"
-            if item["status"]=="completed" and (path/"best.pt").exists():continue
             checkpoint=None
             # best.pt is committed first; a crash can leave it as the only save.
             recovery = last if last.exists() else path/"best.pt"
             if recovery.exists():
                 payload=checkpoint_read(recovery,select_device("cpu"))
-                if int(payload["step"])>=config["steps"] and (path/"best.pt").exists():
+                from .marathon_train import resume_best_score
+                resume_best_score(payload, path, select_device("cpu"), recovery)
+                if (item["status"]=="completed" or int(payload["step"])>=config["steps"]) and (path/"best.pt").exists():
                     item["status"]="completed"
                     atomic_json(manifest_path,manifest)
                     continue

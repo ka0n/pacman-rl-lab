@@ -32,6 +32,17 @@ fit within capacity. These previously infeasible configurations now fail early.
 The checkpoint dictionary format is unchanged. Warm restart still resets replay,
 RNG and episode state. Saving best before last protects against process failure
 between the two atomic file replacements; it is not a two-file transaction.
+Both suites reconcile best checkpoints before marking runs complete, including
+old last-before-best interruptions. Recovery from last requires its saved
+evaluation to match the recorded best score; otherwise unavailable best weights
+produce an explicit recovery error. An external warm restart copies the best
+model from the source checkpoint's directory into the new output directory.
+
+Sourcery's follow-up edge cases also have focused regressions: effective world
+count is clamped before recurrent capacity validation; profiling uses the same
+live-tail readiness as training; and Python batch cases run without a native
+build. Cadence overrides, like ghost-count overrides, require a single-game
+native batch so settings cannot leak between lanes.
 
 No Motion-CNN architecture, game rules, rewards, observations, evaluation seeds
 or historical experiment artifacts were changed. The legacy episodic timeout
@@ -40,7 +51,7 @@ No learning-quality conclusion follows from these fixes or smoke tests.
 
 ## Local validation
 
-- Full Python suite with Metal access: **161 passed, no skips**.
+- Full Python suite with Metal access: **180 passed, no skips**.
 - Rust debug and release suites: **3 passed each**; release library rebuilt.
 - Python/Rust parity: all 7 maps × 3 ghost counts × 2 cadences × 30 episodes,
   **501,488 identical steps**, including observations, rewards, endings and stats.

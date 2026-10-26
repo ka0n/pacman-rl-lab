@@ -40,6 +40,8 @@ def run_profile(*, architecture: str, engine: str = "python", device_name: str =
         raise ValueError("Invalid step, warmup or batch configuration")
     if target_every < 1 or burnin < 0 or unroll < 1 or not 0 <= epsilon <= 1:
         raise ValueError("Invalid target, sequence or epsilon setting")
+    if SPECS[architecture].recurrent and (replay_capacity < burnin + unroll or warmup > replay_capacity):
+        raise ValueError("Recurrent replay must fit burn-in + unroll and warmup")
 
     device = select_device(device_name)
     torch.set_num_threads(min(4, torch.get_num_threads()))
@@ -136,7 +138,7 @@ def run_profile(*, architecture: str, engine: str = "python", device_name: str =
                 state = next_state
             if t % train_every == 0 and t >= warmup:
                 if spec.recurrent:
-                    ready = replay.total >= max(warmup, batch_size) and bool(replay.eligible)
+                    ready = replay.total >= max(warmup, batch_size) and replay.can_sample
                 else:
                     ready = len(replay) >= max(warmup, batch_size)
                 if ready:

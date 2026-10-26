@@ -59,7 +59,9 @@ def test_ghost_reset_pool_and_gym_parity(native_available, maze, initial, reques
     np.array([0, 2**64-1], dtype=np.uint64), np.array([False, True]),
     np.array(["0", "1"]), np.array([0]), np.array([[0, 1]]),
 ))
-def test_invalid_batch_actions_are_atomic(native_available, engine, actions):
+def test_invalid_batch_actions_are_atomic(request, engine, actions):
+    if engine == "rust":
+        request.getfixturevalue("native_available")
     batch = (PythonBatch("small", 2, ghosts=0) if engine == "python" else
              NativeBatch("small", count=2, ghosts=0))
     try:
@@ -79,7 +81,9 @@ def test_invalid_batch_actions_are_atomic(native_available, engine, actions):
 
 
 @pytest.mark.parametrize("engine", ("python", "rust"))
-def test_finished_batch_lane_does_not_advance_other_lanes(native_available, engine):
+def test_finished_batch_lane_does_not_advance_other_lanes(request, engine):
+    if engine == "rust":
+        request.getfixturevalue("native_available")
     batch = (PythonBatch("small", 2, ghosts=0) if engine == "python" else
              NativeBatch("small", count=2, ghosts=0, max_steps=1))
     try:
@@ -214,8 +218,9 @@ def metrics(score):
 
 @pytest.mark.parametrize("module_name", ("cnn_train", "cnn_batch", "marathon_train"))
 @pytest.mark.parametrize("existing_best", (False, True))
+@pytest.mark.parametrize("relocated", (False, True))
 def test_improved_final_checkpoint_survives_mid_save_crash(
-        tmp_path, monkeypatch, module_name, existing_best):
+        tmp_path, monkeypatch, module_name, existing_best, relocated):
     torch = pytest.importorskip("torch")
     module = importlib.import_module(f"pacman_lab.{module_name}")
     evaluation = {"cnn_train": "eval_model", "cnn_batch": "eval_batched",
@@ -257,16 +262,18 @@ def test_improved_final_checkpoint_survives_mid_save_crash(
     # Warm restart can evaluate differently; never overwrite the durable best.
     monkeypatch.setattr(module, evaluation, lambda *args, **kwargs: metrics(15))
     recovery = output/("last.pt" if existing_best else "best.pt")
-    runner(**dict(kwargs, resume=str(recovery)))
-    best_after = torch.load(output/"best.pt", weights_only=True)
+    destination = tmp_path/"relocated" if relocated else output
+    runner(**dict(kwargs, output=destination, resume=str(recovery)))
+    best_after = torch.load(destination/"best.pt", weights_only=True)
     assert best_after["best_score"] == (20, 20)
     if existing_best:
-        last_after = torch.load(output/"last.pt", weights_only=True)
+        last_after = torch.load(destination/"last.pt", weights_only=True)
         assert last_after["best_score"] == (20, 20)
     for key in best["model"]:
         assert torch.equal(best["model"][key], best_after["model"][key])
-    runner(**dict(kwargs, resume=str(recovery)))  # Final-step restart too.
-    assert torch.load(output/"best.pt", weights_only=True)["best_score"] == (20, 20)
+    final_recovery = destination/("last.pt" if existing_best else "best.pt")
+    runner(**dict(kwargs, output=destination, resume=str(final_recovery)))
+    assert torch.load(destination/"best.pt", weights_only=True)["best_score"] == (20, 20)
 
 
 def test_cnn_suite_preserves_best_when_first_last_save_was_interrupted(tmp_path, monkeypatch):
