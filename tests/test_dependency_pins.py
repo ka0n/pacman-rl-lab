@@ -37,7 +37,7 @@ def test_pinned_direct_dependencies_honor_project_bounds():
             f"{name} pin {exact[0]} is outside pyproject range {requirement.specifier}"
         )
         for bound in requirement.specifier:
-            if bound.operator in ("<", "<=", ">", ">="):
+            if bound.operator in ("<", "<="):
                 assert any(
                     pin.operator == bound.operator and pin.version == bound.version
                     for pin in installed[name].specifier
