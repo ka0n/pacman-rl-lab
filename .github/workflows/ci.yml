@@ -30,7 +30,7 @@ jobs:
           python-version: '3.13'
           architecture: arm64
           cache: pip
-          cache-dependency-path: requirements/macos-py313.txt
+          cache-dependency-path: requirements/requirements-macos-py313.txt
       - name: Verify native runner and toolchains
         run: |
           uname -m
@@ -41,7 +41,7 @@ jobs:
           rustc --version
       - name: Install pinned dependencies and project
         run: |
-          python -m pip install -r requirements/macos-py313.txt
+          python -m pip install -r requirements/requirements-macos-py313.txt
           python -m pip install --no-build-isolation --no-deps -e .
           python -m pip check
       - name: Build and test native simulator

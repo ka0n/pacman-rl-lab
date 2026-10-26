@@ -13,7 +13,7 @@ and the first-public-commit candidate tree. A reproducible inventory records
 versions, package-relative license paths, SHA-256 evidence hashes and native-file
 names in [dependency_inventory.json](dependency_inventory.json). Recreate it with
 `.venv/bin/python scripts/license_inventory.py`; the pinned installation is
-[requirements/macos-py313.txt](../requirements/macos-py313.txt).
+[requirements/requirements-macos-py313.txt](../requirements/requirements-macos-py313.txt).
 
 **No identified license conflict blocks this source-only release.** This is not
 an assertion that every future binary build or optional backend is covered:
