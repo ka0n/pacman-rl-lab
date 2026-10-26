@@ -209,13 +209,15 @@ def run_suite(root: Path, *,steps=1000000,repeats=3,seed=42,engine="python",devi
             last=path/"last.pt"
             if item["status"]=="completed" and (path/"best.pt").exists():continue
             checkpoint=None
-            if last.exists():
-                payload=checkpoint_read(last,select_device("cpu"))
+            # best.pt is committed first; a crash can leave it as the only save.
+            recovery = last if last.exists() else path/"best.pt"
+            if recovery.exists():
+                payload=checkpoint_read(recovery,select_device("cpu"))
                 if int(payload["step"])>=config["steps"] and (path/"best.pt").exists():
                     item["status"]="completed"
                     atomic_json(manifest_path,manifest)
                     continue
-                checkpoint=str(last)
+                checkpoint=str(recovery)
             elif path.exists() and any(path.iterdir()):
                 import shutil
                 shutil.rmtree(path)

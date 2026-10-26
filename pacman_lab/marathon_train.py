@@ -82,6 +82,19 @@ def atomic_save_torch(payload, path: Path):
     os.replace(temp, path)
 
 
+def resume_best_score(checkpoint, output: Path, device):
+    """Recover a best checkpoint committed just before an interrupted last save."""
+    score = tuple(checkpoint.get("best_score", (-1.0, -1.0)))
+    best_path = output / "best.pt"
+    if best_path.exists():
+        best = checkpoint_read(best_path, device)
+        config_key = "marathon_config" if "marathon_config" in checkpoint else "config"
+        if best.get(config_key) != checkpoint.get(config_key):
+            raise ValueError("Best checkpoint belongs to a different training configuration")
+        score = max(score, tuple(best["best_score"]))
+    return score
+
+
 def run_marathon_training(variant: str, steps: int, seed: int, output: str | Path,
                           device_name="auto", maze="small", eval_every=20000,
                           eval_episodes=20, save_every=10000, batch_size=64,
@@ -136,7 +149,7 @@ def run_marathon_training(variant: str, steps: int, seed: int, output: str | Pat
         online.load_state_dict(saved["model"])
         target.load_state_dict(saved.get("target", saved["model"]))
         optimizer.load_state_dict(saved["optimizer"])
-        best_score = tuple(saved.get("best_score", (-1.0, -1.0)))
+        best_score = resume_best_score(saved, output, device)
         print(f"Warm restart at {start_step}/{steps}; replay/RNG/episode reset", flush=True)
     else:
         if (output / "last.pt").exists() or (output / "metrics.csv").exists():
@@ -230,9 +243,9 @@ def run_marathon_training(variant: str, steps: int, seed: int, output: str | Pat
                            "version": "0.5.0", "marathon_config": config,
                            "best_score": best_score,
                            "metrics": metrics or {}}
-                atomic_save_torch(payload, output / "last.pt")
                 if should_eval and improved:
                     atomic_save_torch(payload, output / "best.pt")
+                atomic_save_torch(payload, output / "last.pt")
     return output
 
 

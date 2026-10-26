@@ -20,9 +20,9 @@ import numpy as np
 
 from .cnn_models import SPECS, make_model, parameters_count
 from .cnn_train import EpisodeReplay, FIELDS, eval_model, minibatch_loss
-from .core import PacmanGame
+from .core import PacmanGame, validate_batch_actions
 from .dqn import select_device
-from .marathon_train import atomic_save_torch, checkpoint_read
+from .marathon_train import atomic_save_torch, checkpoint_read, resume_best_score
 from .cnn_motion import observer_for, current_frame
 from .train import exploration_epsilon
 from .cnn_safety import maze_risk, shaped_reward
@@ -40,6 +40,9 @@ class PythonBatch:
 
     def step(self, actions):
         from .native import BatchOutcome
+        actions = validate_batch_actions(actions, self.count)
+        if any(game.done for game in self.games):
+            raise RuntimeError("episode finished; reset completed episodes before stepping")
         outcomes = [game.step(int(action)) for game,action in zip(self.games,actions)]
         return BatchOutcome(
             observations=np.stack([x.observation for x in outcomes]),
@@ -57,22 +60,18 @@ class VectorEpisodeReplay(EpisodeReplay):
     """Store independent unfinished episodes, preserving recurrent boundaries."""
     def __init__(self, capacity: int, sequence_length: int, worlds: int):
         super().__init__(capacity, sequence_length)
+        if worlds < 1 or capacity < worlds * sequence_length:
+            raise ValueError("Replay capacity must hold burn-in + unroll for every world")
+        self.episode_capacities = [capacity // worlds + int(i < capacity % worlds)
+                                   for i in range(worlds)]
         self.current_by_world: list[list] = [[] for _ in range(worlds)]
 
+    def _inflight(self):
+        return zip(self.current_by_world, self.episode_capacities)
+
     def append_at(self, index: int, item, done: bool):
-        seq = self.current_by_world[index]
-        seq.append(item)
-        self.total += 1
-        if done:
-            self.current_by_world[index] = []
-            self.episodes.append(seq)
-            if len(seq) >= self.sequence_length:
-                self.eligible.append(seq)
-        while self.total > self.capacity and self.episodes:
-            gone = self.episodes.popleft()
-            self.total -= len(gone)
-            if len(gone) >= self.sequence_length:
-                assert self.eligible.pop(0) is gone
+        self.current_by_world[index] = self._append_episode(
+            self.current_by_world[index], item, done, self.episode_capacities[index])
 
 
 def run_batched(*, architecture: str, steps: int, seed: int, output: Path | str,
@@ -100,6 +99,10 @@ def run_batched(*, architecture: str, steps: int, seed: int, output: Path | str,
         raise ValueError("Invalid batch size or epsilon")
     if not 0 < epsilon_decay_fraction <= 1:
         raise ValueError("Invalid epsilon schedule")
+    if SPECS[architecture].recurrent and replay_capacity < worlds * (burnin + unroll):
+        raise ValueError("Replay capacity must hold burn-in + unroll for every world")
+    if SPECS[architecture].recurrent and warmup > replay_capacity:
+        raise ValueError("Recurrent warmup must not exceed replay capacity")
     if death_penalty is not None and death_penalty >= 0:
         raise ValueError('Death penalty must be negative')
     if risk_shaping_weight < 0:
@@ -173,7 +176,7 @@ def run_batched(*, architecture: str, steps: int, seed: int, output: Path | str,
                 raise ValueError("Checkpoint shape mismatch")
             start_step=int(payload["step"])
             episodes=int(payload["episodes"])
-            best_score=tuple(payload["best_score"])
+            best_score=resume_best_score(payload, path, device)
             fine_tune=payload.get("fine_tune")
             online.load_state_dict(payload["model"])
             target.load_state_dict(payload["target"])
@@ -305,7 +308,7 @@ def run_batched(*, architecture: str, steps: int, seed: int, output: Path | str,
                 nupdates=(completed//train_every)-(previous//train_every)
                 if completed-start_step>=warmup:
                     for _ in range(nupdates):
-                        ready=(replay.total>=max(warmup,batch_size) and bool(replay.eligible)
+                        ready=(replay.total>=max(warmup,batch_size) and replay.can_sample
                                if spec.recurrent else len(replay)>=max(warmup,batch_size))
                         if not ready:break
                         samples=(replay.sample(rng,batch_size) if spec.recurrent
@@ -344,8 +347,8 @@ def run_batched(*, architecture: str, steps: int, seed: int, output: Path | str,
                              "step":completed,"steps":completed,"episodes":episodes,
                              "config":config,"best_score":best_score,"metrics":metrics or {},
                              "fine_tune":fine_tune}
-                    atomic_save_torch(payload,path/"last.pt")
                     if evaluate and improved:atomic_save_torch(payload,path/"best.pt")
+                    atomic_save_torch(payload,path/"last.pt")
         return path
     finally:
         env.close()

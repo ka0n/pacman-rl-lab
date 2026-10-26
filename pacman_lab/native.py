@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from .core import MAPS, StepResult
+from .core import MAPS, StepResult, validate_batch_actions
 
 
 class _Stats(C.Structure):
@@ -132,27 +132,25 @@ class NativeBatch:
         if ghosts is not None:
             if ghosts not in (0,1,2): raise ValueError("ghosts must be 0, 1 or 2")
             if self.count != 1: raise ValueError("Changing ghost count requires a single-game batch")
-            self.ghost_count = ghosts
         if ghost_every is not None:
             if ghost_every < 1: raise ValueError("ghost_every must be >= 1")
-            self.ghost_every = ghost_every
         if seed is not None and not 0 <= seed < 2**64-1:
             raise ValueError("Rust parity seeds must be integers between 0 and 2**64-2")
         frame = self._obs[index]
         info = _Stats()
+        new_ghosts = self.ghost_count if ghosts is None else ghosts
+        new_every = self.ghost_every if ghost_every is None else ghost_every
         rc = self.lib.pacman_reset_one(self._ptr, index, 2**64-1 if seed is None else seed,
-                                       self.ghost_count, self.ghost_every,
+                                       new_ghosts, new_every,
                                        frame.ctypes.data, C.byref(info))
         if rc:
             raise RuntimeError(f"native reset failed ({rc})")
+        self.ghost_count, self.ghost_every = new_ghosts, new_every
         self._stats[index] = info
         return frame.copy(), self._info(info)
 
     def step(self, actions):
-        arr = np.ascontiguousarray(actions, dtype=np.uint8)
-        if arr.shape != (self.count,):
-            raise ValueError(f"Expected {self.count} actions")
-        if np.any(arr > 3): raise ValueError("Actions must be between 0 and 3")
+        arr = validate_batch_actions(actions, self.count)
         rc = self.lib.pacman_step(self._ptr, arr.ctypes.data, self._obs.ctypes.data,
                                   self._rewards.ctypes.data, self._terminated.ctypes.data,
                                   self._truncated.ctypes.data, self._stats)
@@ -181,6 +179,8 @@ class NativePacmanGame:
 
     def reset(self, seed=None, ghosts=None, ghost_every=None):
         self._last_obs, self._last_info = self.batch.reset_one(0,seed,ghosts,ghost_every)
+        self.ghost_count = self.batch.ghost_count
+        self.ghost_every = self.batch.ghost_every
         self.done = self.won = False
         return self._last_obs.copy(), self._last_info.copy()
 

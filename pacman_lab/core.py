@@ -98,6 +98,16 @@ MAPS = {
 DIRECTIONS = ((-1, 0), (1, 0), (0, -1), (0, 1))
 
 
+def validate_batch_actions(actions, count: int) -> np.ndarray:
+    """Validate before narrowing to the native action type or stepping any lane."""
+    arr = np.asarray(actions)
+    if arr.shape != (count,):
+        raise ValueError(f"Expected {count} actions")
+    if arr.dtype.kind not in "iu" or np.any(arr < 0) or np.any(arr > 3):
+        raise ValueError("Actions must be integers between 0 and 3")
+    return np.ascontiguousarray(arr, dtype=np.uint8)
+
+
 @dataclass
 class StepResult:
     observation: np.ndarray
@@ -151,7 +161,7 @@ class PacmanGame:
         self.initial_player = player_positions[0]
         self.initial_ghosts = [(r, c) for r, row in enumerate(self.layout)
                                for c, tile in enumerate(row) if tile == "G"]
-        if ghosts > len(self.initial_ghosts):
+        if len(self.initial_ghosts) < 2:
             # Use an additional distant cell on tiny maps.
             self.initial_ghosts += [self._furthest_floor(self.initial_ghosts)]
         self.ghost_count = ghosts
