@@ -1,5 +1,7 @@
 # Keep Python, native Rust, and CI dependencies up to date.
 # The Rust engine currently has no external crates; this entry covers future additions.
+# Python pins live in requirements/requirements-macos-py313.txt.
+# Direct pins repeat pyproject.toml's upper bounds so updates stay compatible.
 version: 2
 updates:
   - package-ecosystem: "pip"

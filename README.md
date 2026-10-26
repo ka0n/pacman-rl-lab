@@ -78,7 +78,7 @@ cd pacman-rl-lab
 The setup script installs missing Homebrew Python/Rust tools, creates `.venv`,
 installs `.[dev,ml]`, builds/tests Rust and runs pytest. It starts no experiment.
 For the exact validated Python dependency snapshot, use
-`requirements/macos-py313.txt` before installing the project.
+`requirements/requirements-macos-py313.txt` before installing the project.
 
 Manual equivalent:
 
@@ -86,7 +86,7 @@ Manual equivalent:
 brew install python@3.13 rust
 python3.13 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements/macos-py313.txt
+python -m pip install -r requirements/requirements-macos-py313.txt
 python -m pip install --no-build-isolation --no-deps -e .
 cargo test --release --locked --manifest-path native/pacman_native/Cargo.toml
 cargo build --release --locked --manifest-path native/pacman_native/Cargo.toml
